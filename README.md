@@ -8,6 +8,7 @@
 [![Closes issue](https://img.shields.io/badge/closes-%232141-1f6feb)](https://github.com/NVIDIA/cuda-quantum/issues/2141)
 [![Verification](https://img.shields.io/badge/verification-4%2F4%20passing-2da44e)](#verification)
 [![Python](https://img.shields.io/badge/python-3.8%2B-3776AB?logo=python&logoColor=white)](verification/verify_gates.py)
+[![License](https://img.shields.io/badge/license-Apache--2.0-d4a72c)](LICENSE)
 
 </div>
 
@@ -195,7 +196,10 @@ The patch carries its original DCO sign-off.
 
 ## License
 
+[Apache-2.0](LICENSE).
+
 The analysis and `verification/verify_gates.py` are original work in this
-repository. The patch under `patches/` is a diff against
-[NVIDIA/cuda-quantum](https://github.com/NVIDIA/cuda-quantum), which is licensed
-under Apache-2.0; the upstream terms govern that content.
+repository, released under Apache-2.0. The patch under `patches/` is a diff
+against [NVIDIA/cuda-quantum](https://github.com/NVIDIA/cuda-quantum), which is
+itself Apache-2.0 — so the same terms carry across both, and the upstream notice
+governs the upstream-derived content.
