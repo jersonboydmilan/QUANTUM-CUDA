@@ -1,0 +1,70 @@
+From a37c297951db45e88ae6238f3d3f92dd77f40f6c Mon Sep 17 00:00:00 2001
+From: Boyd Milan <76000029+jersonboydmilan@users.noreply.github.com>
+Date: Mon, 12 Oct 2026 18:33:02 +0800
+Subject: [PATCH] [docs] Document qvector targets for custom operations in
+ Python vs C++
+
+Since #4173, a Python custom operation accepts its target qubits as
+individual qubits, a whole qvector, or a mix of both, as long as the total
+matches the operation's target count. The C++ frontend does not: a
+multi-qubit custom operation must be given each target individually, and a
+cudaq::qvector is accepted only as the single argument of a single-qubit
+custom operation (applied to each qubit) or as the controls of a controlled
+one. Per the discussion on #4961 this difference is intentional, but the
+"User-Defined Custom Operations" page did not mention it.
+
+Add a short Python/C++ note after the two-qubit custom operation example,
+reusing the my_cnot / MyCNOT operations that example defines.
+
+Addresses #4961.
+
+Signed-off-by: Boyd Milan <76000029+jersonboydmilan@users.noreply.github.com>
+---
+ docs/sphinx/api/default_ops.rst | 31 +++++++++++++++++++++++++++++++
+ 1 file changed, 31 insertions(+)
+
+diff --git a/docs/sphinx/api/default_ops.rst b/docs/sphinx/api/default_ops.rst
+index d3923eb..48e2997 100644
+--- a/docs/sphinx/api/default_ops.rst
++++ b/docs/sphinx/api/default_ops.rst
+@@ -696,6 +696,37 @@ operations, each operating on 2 qubits.
+       :end-before: [End Docs]
+ 
+ 
++Whether a whole :code:`qvector` can supply the targets of a custom operation
++differs between Python and C++.
++
++.. tab:: Python
++
++    The target qubits of a custom operation can be passed individually, as a
++    whole :code:`qvector`, or as a combination of both. The total number of
++    qubits passed must equal the number of targets of the operation.
++
++    .. code-block:: python
++
++        qubits = cudaq.qvector(2)
++        my_cnot(qubits[0], qubits[1])
++        my_cnot(qubits)   # equivalent to the line above
++        my_cnot(*qubits)  # equivalent to the line above
++
++.. tab:: C++
++
++    The target qubits of a multi-qubit custom operation must be passed
++    individually. A :code:`cudaq::qvector` is accepted in two positions only:
++    as the single argument of a single-qubit custom operation, which applies
++    the operation to each qubit in the vector, and as the controls of a
++    controlled custom operation.
++
++    .. code-block:: cpp
++
++        cudaq::qvector q(2);
++        MyCNOT(q[0], q[1]);  // supported
++        // MyCNOT(q);        // not supported
++
++
+ .. note::
+ 
+   When a custom operation is used on hardware backends, it is synthesized to a
+-- 
+2.53.0
+

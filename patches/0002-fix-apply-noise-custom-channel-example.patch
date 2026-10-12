@@ -1,0 +1,72 @@
+From 4d367ae32da3ba3de791e05154589986b04e1e4f Mon Sep 17 00:00:00 2001
+From: Boyd Milan <76000029+jersonboydmilan@users.noreply.github.com>
+Date: Mon, 12 Oct 2026 18:29:38 +0800
+Subject: [PATCH] [docs] Fix custom KrausChannel example under
+ cudaq.apply_noise
+
+In the Python API reference, the example for registering a custom
+KrausChannel defines `def __init__` at the same indentation as
+`class CustomNoiseChannel`, so the constructor is a module-level function
+instead of a method. The class falls back to the base constructor:
+`CustomNoiseChannel([0.1])` raises `RuntimeError: std::bad_cast`, and
+passing the channel to `cudaq.apply_noise` aborts the interpreter.
+
+Indent `__init__` into the class, align the `dtype=` continuation lines,
+and add the two imports the block uses so it runs as printed. The class
+body is now identical to the CustomNoiseChannel that
+python/tests/builder/test_NoiseModel.py exercises.
+
+Addresses the first item of #5181.
+
+Signed-off-by: Boyd Milan <76000029+jersonboydmilan@users.noreply.github.com>
+---
+ docs/sphinx/api/languages/python_api.rst | 27 +++++++++++++-----------
+ 1 file changed, 15 insertions(+), 12 deletions(-)
+
+diff --git a/docs/sphinx/api/languages/python_api.rst b/docs/sphinx/api/languages/python_api.rst
+index 76702b2..f2ef3f1 100644
+--- a/docs/sphinx/api/languages/python_api.rst
++++ b/docs/sphinx/api/languages/python_api.rst
+@@ -133,24 +133,27 @@ Backend Configuration
+ 
+         .. code-block:: python
+ 
++            import cudaq
++            import numpy as np
++
+             class CustomNoiseChannel(cudaq.KrausChannel):
+                 num_parameters = 1
+                 num_targets = 1
+ 
+-            def __init__(self, params: list[float]):
+-                cudaq.KrausChannel.__init__(self)
+-                # Example: Create Kraus ops based on params
+-                p = params[0]
+-                k0 = np.array([[np.sqrt(1 - p), 0], [0, np.sqrt(1 - p)]],
+-                            dtype=np.complex128)
+-                k1 = np.array([[0, np.sqrt(p)], [np.sqrt(p), 0]],
+-                            dtype=np.complex128)
++                def __init__(self, params: list[float]):
++                    cudaq.KrausChannel.__init__(self)
++                    # Example: Create Kraus ops based on params
++                    p = params[0]
++                    k0 = np.array([[np.sqrt(1 - p), 0], [0, np.sqrt(1 - p)]],
++                                  dtype=np.complex128)
++                    k1 = np.array([[0, np.sqrt(p)], [np.sqrt(p), 0]],
++                                  dtype=np.complex128)
+ 
+-                # Create KrausOperators and add to channel
+-                self.append(cudaq.KrausOperator(k0))
+-                self.append(cudaq.KrausOperator(k1))
++                    # Create KrausOperators and add to channel
++                    self.append(cudaq.KrausOperator(k0))
++                    self.append(cudaq.KrausOperator(k1))
+ 
+-                self.noise_type = cudaq.NoiseModelType.Unknown
++                    self.noise_type = cudaq.NoiseModelType.Unknown
+ 
+             noise = cudaq.NoiseModel()
+             noise.register_channel(CustomNoiseChannel)
+-- 
+2.53.0
+
