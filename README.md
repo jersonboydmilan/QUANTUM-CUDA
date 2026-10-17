@@ -486,6 +486,10 @@ Each patch applies on its own. `0001` and `0003` are merged upstream; `0002` is
 open and was cut from `main` at `be7b0b3`. All carry their original DCO
 sign-off.
 
+## Star History
+
+[![Star History Chart](https://api.star-history.com/svg?repos=jersonboydmilan/QUANTUM-CUDA&type=Date)](https://star-history.com/#jersonboydmilan/QUANTUM-CUDA&Date)
+
 ## License
 
 [Apache-2.0](LICENSE).
