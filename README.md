@@ -2,11 +2,12 @@
 
 # QUANTUM-CUDA
 
-**Contribution work for [NVIDIA CUDA-Q](https://github.com/NVIDIA/cuda-quantum)** — analysis, verification, and the patches behind upstream documentation fixes.
+**Contribution work for [NVIDIA CUDA-Q](https://github.com/NVIDIA/cuda-quantum)** — analysis, verification, and the patches behind upstream documentation fixes and bug reports.
 
 [![#5459 merged](https://img.shields.io/badge/%235459-merged-8250df?logo=nvidia&logoColor=white)](https://github.com/NVIDIA/cuda-quantum/pull/5459)
+[![#5609 merged](https://img.shields.io/badge/%235609-merged-8250df?logo=nvidia&logoColor=white)](https://github.com/NVIDIA/cuda-quantum/pull/5609)
 [![#5608 open](https://img.shields.io/badge/%235608-open-76B900?logo=nvidia&logoColor=white)](https://github.com/NVIDIA/cuda-quantum/pull/5608)
-[![#5609 open](https://img.shields.io/badge/%235609-open-76B900?logo=nvidia&logoColor=white)](https://github.com/NVIDIA/cuda-quantum/pull/5609)
+[![Issues filed](https://img.shields.io/badge/issues-%235646%20%235647-1f6feb)](https://github.com/NVIDIA/cuda-quantum/issues/5646)
 [![Verification](https://img.shields.io/badge/verification-all%20passing-2da44e)](#running-the-verification)
 [![License](https://img.shields.io/badge/license-Apache--2.0-d4a72c)](LICENSE)
 
@@ -16,18 +17,21 @@
 
 ## Contributions
 
-| PR | Status | Change | Verification |
+| Item | Status | Change | Verification |
 | :--- | :--- | :--- | :--- |
 | [#5459](https://github.com/NVIDIA/cuda-quantum/pull/5459) | Merged 2026-09-24 | Document `exp_pauli`, `givens_rotation` and `fermionic_swap`; fix the sign in the `applyExpPauli` doc comment. Closes [#2141](https://github.com/NVIDIA/cuda-quantum/issues/2141). | [`verify_gates.py`](verification/verify_gates.py), numerical, 4/4 |
 | [#5608](https://github.com/NVIDIA/cuda-quantum/pull/5608) | Open | Fix the custom `KrausChannel` example under `cudaq.apply_noise`, which crashes as printed. First item of [#5181](https://github.com/NVIDIA/cuda-quantum/issues/5181). | [`verify_apply_noise_example.py`](verification/verify_apply_noise_example.py), runtime, 5/5 |
-| [#5609](https://github.com/NVIDIA/cuda-quantum/pull/5609) | Open | Document how a `qvector` can be passed to a custom operation in Python vs C++. Requested in [#4961](https://github.com/NVIDIA/cuda-quantum/issues/4961). | [`verify_custom_op_qvector.py`](verification/verify_custom_op_qvector.py), runtime, 7/7 |
+| [#5609](https://github.com/NVIDIA/cuda-quantum/pull/5609) | Merged 2026-10-16 | Document how a `qvector` can be passed to a custom operation in Python vs C++. Requested in [#4961](https://github.com/NVIDIA/cuda-quantum/issues/4961). | [`verify_custom_op_qvector.py`](verification/verify_custom_op_qvector.py), runtime, 7/7 |
+| [#5646](https://github.com/NVIDIA/cuda-quantum/issues/5646) | Issue, open | Python bridge: single-target custom operations do not broadcast over a `qvector`, against spec §6. Filed at the CUDA-Q architect's request in review of #5609. | [`probe_bridge_consistency.py`](verification/probe_bridge_consistency.py), runtime probe |
+| [#5647](https://github.com/NVIDIA/cuda-quantum/issues/5647) | Issue, open | Python bridge: multi-target custom operations pull targets out of a `qvector`, which nothing else in the language does. Same request. | [`probe_bridge_consistency.py`](verification/probe_bridge_consistency.py), runtime probe |
 
 > [!NOTE]
-> The rule for every PR here: nothing is transcribed from existing comments or
+> The rule for every item here: nothing is transcribed from existing comments or
 > issue text. Each claim is recomputed from what CUDA-Q actually does — the gate
 > sequences it executes, or the installed runtime itself — and the script that
 > does it is in [`verification/`](verification/). That rule caught a sign error
-> in #5459, and a mistake in the issue text behind #5608.
+> in #5459, a mistake in the issue text behind #5608, and in #5609 an asymmetry
+> that the CUDA-Q architect identified as a Python bridge bug.
 
 ## What's here
 
@@ -36,6 +40,7 @@
 | [`verification/verify_gates.py`](verification/verify_gates.py) | #5459 — standalone numerical check of every matrix and sign convention. Requires only `numpy`. |
 | [`verification/verify_apply_noise_example.py`](verification/verify_apply_noise_example.py) | #5608 — extracts the docs example from the `.rst` source and runs it against the installed `cudaq`. |
 | [`verification/verify_custom_op_qvector.py`](verification/verify_custom_op_qvector.py) | #5609 — runs every Python call form the new note describes against the installed `cudaq`. |
+| [`verification/probe_bridge_consistency.py`](verification/probe_bridge_consistency.py) | #5646 / #5647 — prints how the bridge treats `qvector` arguments for built-ins, custom operations, and user kernels, side by side. |
 | [`patches/`](patches/) | Each upstream commit as a `git format-patch` export, DCO sign-off intact. |
 
 ---
@@ -249,7 +254,9 @@ and shares no files with #5601.
 
 ## PR #5609 — `qvector` targets for custom operations, Python vs C++
 
-> Open. Documents the API difference requested in #4961.
+> Merged 2026-10-16 by @khalatepradnya. Documents the API difference requested
+> in #4961. Its review produced issues #5646 and #5647 — see
+> [In review](#in-review-the-asymmetry-is-a-bug).
 
 Since #4173, a Python custom operation accepts its targets as a whole `qvector`.
 #4961 reported that C++ does not, and asked for C++ to follow. A compiler
@@ -309,6 +316,82 @@ The C++ statements come from reading the bridge and from the maintainer's
 comment; `nvq++` is not part of the `pip` wheel, so they were not compiled here.
 The PR says so and asks a reviewer to confirm that tab.
 
+### In review: the asymmetry is a bug
+
+@schweitzpgi, CUDA-Q's architect, answered the open question directly. The
+language rule is that an operation defined on a single target is overloaded to
+broadcast over a sequence, and that passing a sequence to an operation with more
+than one target is a hard error, because arguments are positional. Python
+custom operations get both halves backwards. He asked for issues to be filed if
+none existed; @khalatepradnya seconded it.
+
+None existed, so the next step was to measure the whole surface rather than the
+two cases already known. The probe runs each call form in its own subprocess
+against `cudaq` 0.16.0:
+
+```console
+$ python3 verification/probe_bridge_consistency.py
+[single-target]
+  x(q), qvector(3)                     ok   { 111:1000 }
+  custom_x(q), qvector(1)              ok   { 1:1000 }
+  custom_x(q), qvector(3)              abort custom operation requires 1 qubit target(s), but 3 were provided
+  custom_x(q), qvector(n), n=3         abort custom operation requires 1 qubit target(s), but 3 were provided
+  t.adj(q), qvector(3)                 ok   { 000:1000 }
+  custom_x.adj(q), qvector(3)          error invalid target operand - target must not be a qvector
+  x(a, b)                              ok   { 11:1000 }
+  custom_x(a, b)                       error custom operation requires 1 qubit target(s), but 2 were provided
+  custom_x.ctrl(c, t), c = qvector(2)  ok   { 111:1000 }
+
+[multi-target]
+  swap(q[0], q[1])                     ok   { 01:1000 }
+  swap(q), qvector(2)                  error missing value
+  swap(*q), qvector(2)                 error CUDA-Q does not currently support Starred expressions
+  custom_swap(q), qvector(2)           ok   { 01:1000 }
+  custom_swap(*q), qvector(2)          ok   { 01:1000 }
+  custom_swap(q, r), qvector(1)        ok   { 01:1000 }
+
+[user kernel]
+  two_qubit_kernel(q), qvector(2)      error missing value
+  two_qubit_kernel(*q), qvector(2)     error CUDA-Q does not currently support Starred expressions
+
+[hermitian adj]
+  x.adj(q[0])                          error 'quake.x' op may not be adjoint
+  h.adj(q[0])                          error 'quake.h' op may not be adjoint
+  t.adj(q[0])                          ok   { 0:1000 }
+```
+
+Read top to bottom, it shows three things that the two known cases did not:
+
+- **The single-target failure is broader than broadcast.** `custom_x(q)` works
+  only when `len(q) == 1`, by coincidence of the count rule. `custom_x(a, b)`,
+  which spec §4 covers, fails too. The `.adj` form fails with a different error,
+  so plain and adjoint calls go through separate code paths with separate bugs.
+- **Custom operations disagree with themselves.** In the multi-target section,
+  only the plain custom-op call accepts `q`, `*q` and `q, r`. Built-in `swap`
+  and user kernels reject all of them, and so do the custom op's own `.adj` and
+  `.ctrl` paths. It is also the only place in the bridge that accepts a starred
+  argument.
+- **The history explains it.** #2452 began as the single-target broadcast case,
+  and in that thread @schweitzpgi asked whether broadcast was intended. #4173
+  later closed #2452 with the target-count check instead, and added `qvector`
+  extraction for multi-target calls. Only the plain path got that change; its
+  review had asked whether `.ctrl`/`.adj` needed the same logic.
+
+The result was two issues, each with a reproducer, the full table, permalinks
+to the root cause at `f0e69e9`, and the decisions it leaves to maintainers:
+
+| Issue | Scope | Open decisions listed for maintainers |
+| :--- | :--- | :--- |
+| [#5646](https://github.com/NVIDIA/cuda-quantum/issues/5646) | Broadcast single-target custom ops in plain, `.adj`, and multi-`ref` forms, mirroring the C++ invariant loop | — |
+| [#5647](https://github.com/NVIDIA/cuda-quantum/issues/5647) | Make a `qvector` target of a multi-target custom op a compile-time error with a clear message | #2484 is open and asks for the opposite; six tests pin current behavior; the note from #5609 will need updating; whether `*q` stays |
+
+The last probe section is outside both issues. `.adj` on a self-adjoint gate
+gets through the Python frontend, sets `is_adj`, and is rejected later by the
+`Hermitian` trait verifier — and the frontend's own typo hint suggests
+`x.adj(...)`. Since `U† = U` there, the frontend could either drop the flag or
+reject the call clearly. That was raised as a question in the PR thread rather
+than filed unasked.
+
 ---
 
 ## Repository analysis
@@ -367,8 +450,8 @@ Without local GPU access the second group is where work can be *verified* before
 submitting rather than guessed at — which is what drove the choice here.
 
 Since then, `pip install cudaq` has turned out to be enough to execute most
-Python-facing claims for real, CPU simulators included. The two newer
-verifications use it.
+Python-facing claims for real, CPU simulators included. Every script after
+`verify_gates.py` uses it.
 
 ## Running the verification
 
@@ -376,12 +459,17 @@ verifications use it.
 # PR #5459 — numpy only
 python3 verification/verify_gates.py
 
-# PR #5608 and #5609 — the CUDA-Q wheel (Python 3.11+)
+# PR #5608, #5609 and issues #5646 / #5647 — the CUDA-Q wheel (Python 3.11+)
 pip install cudaq numpy
 git clone https://github.com/NVIDIA/cuda-quantum.git ../cuda-quantum
 python3 verification/verify_apply_noise_example.py ../cuda-quantum
 python3 verification/verify_custom_op_qvector.py
+python3 verification/probe_bridge_consistency.py
 ```
+
+`probe_bridge_consistency.py` is a probe rather than a pass/fail check. Once
+#5646 and #5647 are fixed, its custom-operation rows should change to match the
+built-in rows next to them.
 
 `verify_apply_noise_example.py` reads the example from whichever checkout it is
 given, so it reports the bug on `main` and passes once the patch is applied.
@@ -394,8 +482,8 @@ cd cuda-quantum
 git am ../patches/0002-fix-apply-noise-custom-channel-example.patch
 ```
 
-Each patch applies on its own. `0001` is already merged upstream; `0002` and
-`0003` were cut from `main` at `be7b0b3`. All carry their original DCO
+Each patch applies on its own. `0001` and `0003` are merged upstream; `0002` is
+open and was cut from `main` at `be7b0b3`. All carry their original DCO
 sign-off.
 
 ## License
