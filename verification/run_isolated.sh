@@ -15,7 +15,9 @@ for id in $ids; do
   if [[ "$skip" == *" $name "* ]]; then
     printf "  %-62s SKIP (macOS arm64 JIT)\n" "$name"; skipped=$((skipped+1)); continue
   fi
-  if out=$("$py" -m pytest "$id" -q -rs -p no:cacheprovider -W ignore 2>&1); then
+  # Collected IDs are relative to pytest's rootdir, which inside a checkout is
+  # the repository root; rebuild each ID from the file actually being run.
+  if out=$("$py" -m pytest "$file::$name" -q -rs -p no:cacheprovider -W ignore 2>&1); then
     if grep -q " skipped" <<<"$out"; then
       reason=$(grep -m1 "^SKIPPED" <<<"$out" | sed 's/.*: //')
       printf "  %-62s SKIP (%s)\n" "$name" "${reason:-skipped}"; skipped=$((skipped+1))

@@ -1,0 +1,273 @@
+From b14594c095833aabc53534a886c96a7bfb9c07d9 Mon Sep 17 00:00:00 2001
+From: Boyd Milan <76000029+jersonboydmilan@users.noreply.github.com>
+Date: Sun, 18 Oct 2026 11:47:59 +0800
+Subject: [PATCH] [python] Reject a qvector as the targets of a multi-target
+ custom operation
+
+A custom operation with more than one target pulled its targets out of a
+qvector argument: custom_swap(q), custom_swap(*q) and custom_swap(q, r) were
+all accepted. Nothing else in the Python kernel language does this. Built-in
+multi-target operations and user kernels reject these calls, and so do the
+custom operation's own .adj and .ctrl paths. In review of #5649 the CUDA-Q
+DSL rules were stated: every quantum operation takes its targets as
+individual positional arguments, and only a single-target operation has a
+qvector (broadcast) overload. #2484, which asked for this convenience, should
+not be implemented.
+
+For numTargets > 1, __expandCustomOpTargets now takes each target as its own
+positional argument and rejects a qvector or a starred argument at compile
+time, naming the operation in the error. The single-target path is unchanged
+here; #5649 replaces it with broadcast.
+
+The tests that pinned the old behavior now expect the error. The runtime-sized
+case is caught at compile time too, so it no longer needs the macOS arm64 JIT
+skip. The note in default_ops.rst is updated to match.
+
+Fixes #5647.
+
+Signed-off-by: Boyd Milan <76000029+jersonboydmilan@users.noreply.github.com>
+---
+ docs/sphinx/api/default_ops.rst               |  16 +--
+ python/cudaq/kernel/ast_bridge.py             |  32 ++++-
+ python/tests/custom/test_custom_operations.py | 117 ++++++++----------
+ 3 files changed, 93 insertions(+), 72 deletions(-)
+
+diff --git a/docs/sphinx/api/default_ops.rst b/docs/sphinx/api/default_ops.rst
+index 48e2997..7928c2f 100644
+--- a/docs/sphinx/api/default_ops.rst
++++ b/docs/sphinx/api/default_ops.rst
+@@ -696,21 +696,21 @@ operations, each operating on 2 qubits.
+       :end-before: [End Docs]
+ 
+ 
+-Whether a whole :code:`qvector` can supply the targets of a custom operation
+-differs between Python and C++.
++The target qubits of a custom operation with more than one target are passed
++individually, as positional arguments, in both Python and C++.
+ 
+ .. tab:: Python
+ 
+-    The target qubits of a custom operation can be passed individually, as a
+-    whole :code:`qvector`, or as a combination of both. The total number of
+-    qubits passed must equal the number of targets of the operation.
++    Each target qubit of a multi-qubit custom operation must be passed as its
++    own argument. A :code:`qvector` cannot supply the targets, whether passed
++    whole or unpacked with :code:`*`; either form is a compile-time error.
+ 
+     .. code-block:: python
+ 
+         qubits = cudaq.qvector(2)
+-        my_cnot(qubits[0], qubits[1])
+-        my_cnot(qubits)   # equivalent to the line above
+-        my_cnot(*qubits)  # equivalent to the line above
++        my_cnot(qubits[0], qubits[1])  # supported
++        # my_cnot(qubits)              # error
++        # my_cnot(*qubits)             # error
+ 
+ .. tab:: C++
+ 
+diff --git a/python/cudaq/kernel/ast_bridge.py b/python/cudaq/kernel/ast_bridge.py
+index 9b350fb..dcd400d 100644
+--- a/python/cudaq/kernel/ast_bridge.py
++++ b/python/cudaq/kernel/ast_bridge.py
+@@ -2586,9 +2586,37 @@ class PyASTBridge(ast.NodeVisitor):
+         return None
+ 
+     def __expandCustomOpTargets(self, pyArgs, numTargets, node):
+-        """Collect qubit references for a custom operation call, expanding `qvector`
+-        arguments into individual references.
++        """Collect qubit references for a custom operation call. An operation
++        with more than one target takes each target as its own positional
++        argument; only a single-target operation accepts a `qvector`.
+         """
++        if numTargets > 1:
++            opName = node.func.id
++            targets = []
++            for arg in pyArgs:
++                if isinstance(arg, ast.Starred):
++                    self.emitFatalError(
++                        f'custom operation {opName} has {numTargets} targets; '
++                        'pass each target qubit individually instead of '
++                        'unpacking a qvector', node)
++                self.visit(arg)
++                val = self.popValue()
++                if quake.VeqType.isinstance(val.type):
++                    self.emitFatalError(
++                        f'custom operation {opName} has {numTargets} targets; '
++                        'pass each target qubit individually, a qvector '
++                        'cannot supply them', node)
++                if not quake.RefType.isinstance(val.type):
++                    self.emitFatalError(
++                        'invalid target operand for custom operation: '
++                        'expected a qubit', node)
++                targets.append(val)
++            if len(targets) != numTargets:
++                self.emitFatalError(
++                    f'custom operation requires {numTargets} qubit target(s), '
++                    f'but {len(targets)} were provided', node)
++            return targets
++
+         # Pass 1: Compute the static qubit count
+         values = []
+         staticCount = 0
+diff --git a/python/tests/custom/test_custom_operations.py b/python/tests/custom/test_custom_operations.py
+index cd41bf9..ef43d97 100644
+--- a/python/tests/custom/test_custom_operations.py
++++ b/python/tests/custom/test_custom_operations.py
+@@ -249,62 +249,70 @@ def test_individual_qubit_refs():
+     assert counts.most_probable() == "01"
+ 
+ 
+-def test_qvector_direct():
+-    """custom_swap(qvec)"""
++QVECTOR_TARGET_ERROR = 'a qvector cannot supply them'
++STARRED_TARGET_ERROR = 'instead of unpacking a qvector'
++
++
++def test_qvector_as_targets_raises_error():
++    """custom_swap(qvec): a multi-target operation takes positional targets"""
+     cudaq.register_operation("custom_swap", swap_matrix)
+ 
+-    @cudaq.kernel
+-    def kernel():
+-        qvec = cudaq.qvector(2)
+-        x(qvec[0])
+-        custom_swap(qvec)
++    with pytest.raises(RuntimeError) as error:
+ 
+-    counts = cudaq.sample(kernel)
+-    assert counts.most_probable() == "01"
++        @cudaq.kernel
++        def kernel():
++            qvec = cudaq.qvector(2)
++            custom_swap(qvec)
++
++        kernel.compile()
++    assert QVECTOR_TARGET_ERROR in repr(error)
+ 
+ 
+-def test_starred_qvector():
++def test_starred_qvector_as_targets_raises_error():
+     """custom_swap(*qvec)"""
+     cudaq.register_operation("custom_swap", swap_matrix)
+ 
+-    @cudaq.kernel
+-    def kernel():
+-        qvec = cudaq.qvector(2)
+-        x(qvec[0])
+-        custom_swap(*qvec)
++    with pytest.raises(RuntimeError) as error:
+ 
+-    counts = cudaq.sample(kernel)
+-    assert counts.most_probable() == "01"
++        @cudaq.kernel
++        def kernel():
++            qvec = cudaq.qvector(2)
++            custom_swap(*qvec)
++
++        kernel.compile()
++    assert STARRED_TARGET_ERROR in repr(error)
+ 
+ 
+-def test_mixed_starred_qvec_and_qref():
+-    """custom_swap(*qvec, qbit)"""
++def test_mixed_qvector_and_qubit_targets_raises_error():
++    """custom_swap(qvec, qbit)"""
+     cudaq.register_operation("custom_swap", swap_matrix)
+ 
+-    @cudaq.kernel
+-    def kernel():
+-        qvec = cudaq.qvector(1)
+-        qbit = cudaq.qubit()
+-        x(qvec[0])
+-        custom_swap(*qvec, qbit)
++    with pytest.raises(RuntimeError) as error:
+ 
+-    counts = cudaq.sample(kernel)
+-    assert counts.most_probable() == "01"
++        @cudaq.kernel
++        def kernel():
++            qvec = cudaq.qvector(1)
++            qbit = cudaq.qubit()
++            custom_swap(qvec, qbit)
+ 
++        kernel.compile()
++    assert QVECTOR_TARGET_ERROR in repr(error)
+ 
+-def test_unstarred_qvec_and_qref():
+-    """custom_swap(qvec, qbit)"""
++
++def test_mixed_starred_qvector_and_qubit_targets_raises_error():
++    """custom_swap(*qvec, qbit)"""
+     cudaq.register_operation("custom_swap", swap_matrix)
+ 
+-    @cudaq.kernel
+-    def kernel():
+-        qvec = cudaq.qvector(1)
+-        qbit = cudaq.qubit()
+-        x(qvec[0])
+-        custom_swap(qvec, qbit)
++    with pytest.raises(RuntimeError) as error:
+ 
+-    counts = cudaq.sample(kernel)
+-    assert counts.most_probable() == "01"
++        @cudaq.kernel
++        def kernel():
++            qvec = cudaq.qvector(1)
++            qbit = cudaq.qubit()
++            custom_swap(*qvec, qbit)
++
++        kernel.compile()
++    assert STARRED_TARGET_ERROR in repr(error)
+ 
+ 
+ def test_too_few_qubits_raises_error():
+@@ -341,35 +349,20 @@ def test_too_many_qubits_raises_error():
+         error)
+ 
+ 
+-def test_unknown_veq_size_correct_count():
+-    """custom_swap(*qvec), qvec size is a runtime parameter"""
++def test_runtime_sized_qvector_as_targets_raises_error():
++    """custom_swap(qvec), qvec size a runtime parameter: rejected at compile
++    time, even when the runtime size would match the target count."""
+     cudaq.register_operation("custom_swap", swap_matrix)
+ 
+-    @cudaq.kernel
+-    def kernel(n: int):
+-        qvec = cudaq.qvector(n)
+-        x(qvec[0])
+-        custom_swap(*qvec)
+-
+-    counts = cudaq.sample(kernel, 2)
+-    assert counts.most_probable() == "01"
+-
+-
+-@pytest.mark.skip_macos_arm64_jit
+-def test_unknown_veq_size_incorrect_count():
+-    """custom_swap(*qvec), qvec has more qubits than the operation requires."""
+-    cudaq.register_operation("custom_swap", swap_matrix)
++    with pytest.raises(RuntimeError) as error:
+ 
+-    @cudaq.kernel
+-    def kernel(n: int):
+-        qvec = cudaq.qvector(n)
+-        x(qvec[0])
+-        custom_swap(*qvec)
++        @cudaq.kernel
++        def kernel(n: int):
++            qvec = cudaq.qvector(n)
++            custom_swap(qvec)
+ 
+-    with pytest.raises(RuntimeError) as error:
+-        cudaq.sample(kernel, 3)
+-    assert 'custom operation requires 2 qubit target(s), but 3 were provided' in repr(
+-        error)
++        kernel.compile()
++    assert QVECTOR_TARGET_ERROR in repr(error)
+ 
+ 
+ def test_nested_kernel_single_qubit():
+-- 
+2.53.0
+

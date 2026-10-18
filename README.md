@@ -8,6 +8,7 @@
 [![#5609 merged](https://img.shields.io/badge/%235609-merged-8250df?logo=nvidia&logoColor=white)](https://github.com/NVIDIA/cuda-quantum/pull/5609)
 [![#5608 open](https://img.shields.io/badge/%235608-open-76B900?logo=nvidia&logoColor=white)](https://github.com/NVIDIA/cuda-quantum/pull/5608)
 [![#5649 open](https://img.shields.io/badge/%235649-open-76B900?logo=nvidia&logoColor=white)](https://github.com/NVIDIA/cuda-quantum/pull/5649)
+[![#5653 open](https://img.shields.io/badge/%235653-open-76B900?logo=nvidia&logoColor=white)](https://github.com/NVIDIA/cuda-quantum/pull/5653)
 [![Issues filed](https://img.shields.io/badge/issues-%235646%20%235647-1f6feb)](https://github.com/NVIDIA/cuda-quantum/issues/5646)
 [![Verification](https://img.shields.io/badge/verification-all%20passing-2da44e)](#running-the-verification)
 [![License](https://img.shields.io/badge/license-Apache--2.0-d4a72c)](LICENSE)
@@ -24,8 +25,9 @@
 | [#5608](https://github.com/NVIDIA/cuda-quantum/pull/5608) | Open | Fix the custom `KrausChannel` example under `cudaq.apply_noise`, which crashes as printed. First item of [#5181](https://github.com/NVIDIA/cuda-quantum/issues/5181). | [`verify_apply_noise_example.py`](verification/verify_apply_noise_example.py), runtime, 5/5 |
 | [#5609](https://github.com/NVIDIA/cuda-quantum/pull/5609) | Merged 2026-10-16 | Document how a `qvector` can be passed to a custom operation in Python vs C++. Requested in [#4961](https://github.com/NVIDIA/cuda-quantum/issues/4961). | [`verify_custom_op_qvector.py`](verification/verify_custom_op_qvector.py), runtime, 7/7 |
 | [#5646](https://github.com/NVIDIA/cuda-quantum/issues/5646) | Issue, open; fix in #5649 | Python bridge: single-target custom operations do not broadcast over a `qvector`, against spec §6. Filed at the CUDA-Q architect's request in review of #5609. | [`probe_bridge_consistency.py`](verification/probe_bridge_consistency.py), runtime probe |
-| [#5647](https://github.com/NVIDIA/cuda-quantum/issues/5647) | Issue, open; direction settled | Python bridge: multi-target custom operations pull targets out of a `qvector`, which nothing else in the language does. Same request. The architect has since ruled #2484 should not be implemented, so the fix is to reject the call. | [`probe_bridge_consistency.py`](verification/probe_bridge_consistency.py), runtime probe |
+| [#5647](https://github.com/NVIDIA/cuda-quantum/issues/5647) | Issue, open; fix in #5653 | Python bridge: multi-target custom operations pull targets out of a `qvector`, which nothing else in the language does. Same request. The architect has since ruled #2484 should not be implemented, so the fix is to reject the call. | [`probe_bridge_consistency.py`](verification/probe_bridge_consistency.py), runtime probe |
 | [#5649](https://github.com/NVIDIA/cuda-quantum/pull/5649) | Open | Fix for #5646: broadcast single-target custom operations, plain and `.adj`, over a `qvector` and over several qubits. | [`verify_pr5649.sh`](verification/verify_pr5649.sh), runtime, 22 → 26 passed, 0 failed (5 skipped: no GPU) |
+| [#5653](https://github.com/NVIDIA/cuda-quantum/pull/5653) | Open | Fix for #5647: a `qvector`, whole or unpacked, is a compile-time error as the targets of a multi-target custom operation. | [`verify_bridge_patch.sh`](verification/verify_bridge_patch.sh), runtime, 17 → 22 passed, 0 failed; 31 related tests unchanged |
 
 > [!NOTE]
 > The rule for every item here: nothing is transcribed from existing comments or
@@ -45,6 +47,7 @@
 | [`verification/probe_bridge_consistency.py`](verification/probe_bridge_consistency.py) | #5646 / #5647 — prints how the bridge treats `qvector` arguments for built-ins, custom operations, and user kernels, side by side. |
 | [`verification/verify_pr5649.sh`](verification/verify_pr5649.sh) | #5649 — applies the PR's bridge change onto an installed `cudaq` wheel, runs the PR's test file before and after, then restores the wheel. |
 | [`verification/check_adj_broadcast_phase.py`](verification/check_adj_broadcast_phase.py) | #5649 — confirms broadcast `.adj` applies the adjoint, using a non-Hermitian operation the PR's own test cannot distinguish. |
+| [`verification/verify_bridge_patch.sh`](verification/verify_bridge_patch.sh) | #5653, and any bridge change — applies an `ast_bridge.py` diff onto an installed wheel and runs any number of test files before and after. |
 | [`verification/run_isolated.sh`](verification/run_isolated.sh) | Runs each pytest test in its own process, so a JIT-side abort on macOS arm64 fails one test instead of the whole run. |
 | [`patches/`](patches/) | Each upstream commit as a `git format-patch` export, DCO sign-off intact, plus the #5649 bridge change re-anchored to 0.16.0. |
 
@@ -518,6 +521,81 @@ includes the adjoint is worth confirming in review.
 
 ---
 
+## PR #5653 — reject a `qvector` as multi-target custom-op targets
+
+> Open. Fixes #5647.
+
+With #2484 ruled out in #5649's review, the direction for #5647 was settled:
+every operation takes its targets as individual positional arguments. For a
+custom operation with more than one target, `__expandCustomOpTargets` now
+rejects a `qvector` or a starred argument at compile time, naming the
+operation. The single-target path is left to #5649.
+
+| Call (`custom_swap`, 2 targets) | Before | After |
+| :--- | :--- | :--- |
+| `custom_swap(q[0], q[1])` | accepted | accepted |
+| `custom_swap(q)` / `custom_swap(q, r)` | accepted | error: `... pass each target qubit individually, a qvector cannot supply them` |
+| `custom_swap(*q)` | accepted | error: `... pass each target qubit individually instead of unpacking a qvector` |
+| `custom_swap(q)`, runtime-sized `q` | runtime trap; aborts on macOS arm64 | compile-time error |
+
+The six tests that pinned the old behavior become five expected-error tests.
+Because the runtime-sized case is now caught before any JIT code runs, its
+`skip_macos_arm64_jit` mark goes away with it. A scan of every file that calls
+`register_operation` found no other dependency on the removed behavior.
+
+### Verification
+
+[`verify_bridge_patch.sh`](verification/verify_bridge_patch.sh) generalizes the
+#5649 method: it applies the bridge diff onto the installed 0.16.0 wheel (here
+with only a line offset) and runs each test, isolated, before and after.
+
+| Test file | Before | After |
+| :--- | :--- | :--- |
+| `custom/test_custom_operations.py` (PR branch) | 17 passed, 5 failed, 4 skipped | 22 passed, 0 failed, 4 skipped |
+| `custom/test_euler_decomposition.py` | 3 passed | 3 passed |
+| `custom/test_kak_decomposition.py` | 2 passed | 2 passed |
+| `custom/test_qsd_decomposition.py` | 1 passed | 1 passed |
+| `kernel/test_control_negations.py` | 7 passed | 7 passed |
+| `kernel/test_get_unitary.py` | 18 passed | 18 passed |
+
+The 4 skips are the self-skipping GPU legs, so GPU targets are not covered.
+
+### Composing with #5649
+
+The two fixes touch different parts of `ast_bridge.py`. Applied onto 0.16.0
+together, they apply in either order with a byte-identical result. With both,
+[`probe_bridge_consistency.py`](verification/probe_bridge_consistency.py)
+shows every custom-operation row matching its built-in neighbour:
+
+```console
+[single-target]
+  custom_x(q), qvector(3)              ok   { 111:1000 }
+  custom_x(q), qvector(n), n=3         ok   { 111:1000 }
+  custom_x.adj(q), qvector(3)          ok   { 111:1000 }
+  custom_x(a, b)                       ok   { 11:1000 }
+[multi-target]
+  swap(q), qvector(2)                  error missing value
+  custom_swap(q), qvector(2)           error custom operation custom_swap has 2 targets; pass each target qubit individually, a qvector
+  custom_swap(*q), qvector(2)          error custom operation custom_swap has 2 targets; pass each target qubit individually instead of
+  custom_swap(q, r), qvector(1)        error custom operation custom_swap has 2 targets; pass each target qubit individually, a qvector
+```
+
+The custom-op errors now explain the problem better than the built-in `swap`'s
+`missing value` does. Once both merge, the `qvector` expansion in
+`__expandCustomOpTargets` and the `__nvqpp_customop_size_error` trap lose their
+last caller; the PR offers that cleanup as a follow-up rather than coupling the
+two PRs' merge order.
+
+### Runner fix found along the way
+
+Run against test files inside a cuda-quantum checkout, `run_isolated.sh` first
+reported every test as failing. Pytest's rootdir there is the repository root,
+so collected IDs carry a `python/tests/...` prefix that does not resolve from
+the test's own directory. The runner now rebuilds each ID from the file it was
+given.
+
+---
+
 ## Repository analysis
 
 Read of `NVIDIA/cuda-quantum` as of 2026-09-21, at release 0.16.0 — Apache-2.0,
@@ -605,6 +683,20 @@ bash verification/verify_pr5649.sh python3 /tmp/test_custom_operations.py
 `verify_pr5649.sh` edits the installed `cudaq/kernel/ast_bridge.py` for the
 duration of the run and restores it on exit. Use a virtual environment.
 
+```bash
+# PR #5653 — apply the bridge part of the patch onto the wheel, run tests from a
+# checkout of the PR branch
+git -C ../cuda-quantum fetch https://github.com/jersonboydmilan/cuda-quantum.git \
+  python/reject-qvector-targets-multi-target-custom-ops
+git -C ../cuda-quantum checkout FETCH_HEAD
+git -C ../cuda-quantum diff HEAD~1 -- python/cudaq/kernel/ast_bridge.py > /tmp/5653.diff
+T=../cuda-quantum/python/tests
+bash verification/verify_bridge_patch.sh python3 /tmp/5653.diff \
+  $T/custom/test_custom_operations.py $T/custom/test_euler_decomposition.py \
+  $T/custom/test_kak_decomposition.py $T/custom/test_qsd_decomposition.py \
+  $T/kernel/test_control_negations.py $T/kernel/test_get_unitary.py
+```
+
 `verify_apply_noise_example.py` reads the example from whichever checkout it is
 given, so it reports the bug on `main` and passes once the patch is applied.
 
@@ -620,7 +712,8 @@ Each patch applies on its own. `0001` and `0003` are merged upstream; `0002` is
 open and was cut from `main` at `be7b0b3`. All three carry their original DCO
 sign-off. `0004` is different: it is the bridge part of #5649 re-anchored to
 the 0.16.0 release, for verification only, so it targets an installed wheel
-rather than a checkout.
+rather than a checkout. `0005` is #5653's commit as a `git format-patch`
+export against `main`.
 
 ## Star History
 
