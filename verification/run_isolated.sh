@@ -9,16 +9,23 @@ skip=" $* "
 cd "$(dirname "$file")" || exit 1
 file="$(basename "$file")"
 ids=$("$py" -m pytest "$file" --collect-only -q -p no:cacheprovider -W ignore 2>/dev/null | grep '::')
-pass=0; fail=0
+pass=0; fail=0; skipped=0
 for id in $ids; do
   name="${id#*::}"
-  if [[ "$skip" == *" $name "* ]]; then printf "  %-62s SKIP (macOS arm64 JIT)\n" "$name"; continue; fi
-  if "$py" -m pytest "$id" -q -p no:cacheprovider -W ignore >/dev/null 2>&1; then
-    printf "  %-62s PASS\n" "$name"; pass=$((pass+1))
+  if [[ "$skip" == *" $name "* ]]; then
+    printf "  %-62s SKIP (macOS arm64 JIT)\n" "$name"; skipped=$((skipped+1)); continue
+  fi
+  if out=$("$py" -m pytest "$id" -q -rs -p no:cacheprovider -W ignore 2>&1); then
+    if grep -q " skipped" <<<"$out"; then
+      reason=$(grep -m1 "^SKIPPED" <<<"$out" | sed 's/.*: //')
+      printf "  %-62s SKIP (%s)\n" "$name" "${reason:-skipped}"; skipped=$((skipped+1))
+    else
+      printf "  %-62s PASS\n" "$name"; pass=$((pass+1))
+    fi
   else
     rc=$?
     note="FAIL"; [ "$rc" -ge 128 ] && note="FAIL (process aborted)"
     printf "  %-62s %s\n" "$name" "$note"; fail=$((fail+1))
   fi
 done
-echo "  -- $pass passed, $fail failed"
+echo "  -- $pass passed, $fail failed, $skipped skipped"

@@ -25,7 +25,7 @@
 | [#5609](https://github.com/NVIDIA/cuda-quantum/pull/5609) | Merged 2026-10-16 | Document how a `qvector` can be passed to a custom operation in Python vs C++. Requested in [#4961](https://github.com/NVIDIA/cuda-quantum/issues/4961). | [`verify_custom_op_qvector.py`](verification/verify_custom_op_qvector.py), runtime, 7/7 |
 | [#5646](https://github.com/NVIDIA/cuda-quantum/issues/5646) | Issue, open; fix in #5649 | Python bridge: single-target custom operations do not broadcast over a `qvector`, against spec §6. Filed at the CUDA-Q architect's request in review of #5609. | [`probe_bridge_consistency.py`](verification/probe_bridge_consistency.py), runtime probe |
 | [#5647](https://github.com/NVIDIA/cuda-quantum/issues/5647) | Issue, open; direction settled | Python bridge: multi-target custom operations pull targets out of a `qvector`, which nothing else in the language does. Same request. The architect has since ruled #2484 should not be implemented, so the fix is to reject the call. | [`probe_bridge_consistency.py`](verification/probe_bridge_consistency.py), runtime probe |
-| [#5649](https://github.com/NVIDIA/cuda-quantum/pull/5649) | Open | Fix for #5646: broadcast single-target custom operations, plain and `.adj`, over a `qvector` and over several qubits. | [`verify_pr5649.sh`](verification/verify_pr5649.sh), runtime, 26/30 → 30/30 |
+| [#5649](https://github.com/NVIDIA/cuda-quantum/pull/5649) | Open | Fix for #5646: broadcast single-target custom operations, plain and `.adj`, over a `qvector` and over several qubits. | [`verify_pr5649.sh`](verification/verify_pr5649.sh), runtime, 22 → 26 passed, 0 failed (5 skipped: no GPU) |
 
 > [!NOTE]
 > The rule for every item here: nothing is transcribed from existing comments or
@@ -447,30 +447,45 @@ separate process, and restores the original file on exit (checked by hash).
 ```console
 $ bash verification/verify_pr5649.sh python3 test_custom_operations.py
 == before: cudaq as installed
-  ...26 existing tests                                           PASS
+  ...22 existing tests                                           PASS
+  test_simulators[nvidia], [nvidia-fp64], [nvidia-mqpu], [nvidia-mqpu-fp64]
+                                                                 SKIP (target not available)
+  test_unknown_veq_size_incorrect_count                          SKIP (macOS arm64 JIT)
   test_single_target_broadcast_over_static_qvector               FAIL (process aborted)
   test_single_target_broadcast_over_dynamic_qvector              FAIL (process aborted)
   test_single_target_adjoint_broadcast_over_qvector              FAIL
   test_single_target_broadcast_over_individual_refs              FAIL
-  -- 26 passed, 4 failed
+  -- 22 passed, 4 failed, 5 skipped
 single-qubit custom_s.adj(q[0]): 0
 broadcast custom_s.adj(q):      rejected: invalid target operand - target must not be a qvector
 == after: with the #5649 bridge change
-  ...26 existing tests                                           PASS
+  ...22 existing tests                                           PASS
+  (same 5 skips)
   test_single_target_broadcast_over_static_qvector               PASS
   test_single_target_broadcast_over_dynamic_qvector              PASS
   test_single_target_adjoint_broadcast_over_qvector              PASS
   test_single_target_broadcast_over_individual_refs              PASS
-  -- 30 passed, 0 failed
+  -- 26 passed, 0 failed, 5 skipped
 single-qubit custom_s.adj(q[0]): 0
 broadcast custom_s.adj(q):      000 (adjoint honored)
 ```
 
-All four new tests fail before the change and pass after it, and none of the 26
-existing tests regress. `test_unknown_veq_size_incorrect_count` is skipped, as
-upstream already does on macOS arm64. The two "process aborted" failures are
+All four new tests fail before the change and pass after it, and none of the 22
+existing tests that run here regress. The two "process aborted" failures are
 #5646's own symptom: the count check fires inside JIT code and terminates the
 process instead of raising.
+
+The 5 skips are the same in both runs. Four are the `test_simulators[nvidia*]`
+legs, which skip themselves when no GPU target is available, so **GPU targets
+are not covered by this run**. The fifth is
+`test_unknown_veq_size_incorrect_count`, which upstream already skips on macOS
+arm64.
+
+> [!NOTE]
+> An earlier version of this section reported 26/30 → 30/30. The runner then
+> treated any test that exited cleanly as a pass, so the four self-skipping GPU
+> legs were counted as passes. `run_isolated.sh` now reports skips separately;
+> the conclusion is unchanged.
 
 Rerunning [`probe_bridge_consistency.py`](verification/probe_bridge_consistency.py)
 with the change applied, every single-target custom-operation row now matches
