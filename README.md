@@ -8,7 +8,8 @@
 [![#5609 merged](https://img.shields.io/badge/%235609-merged-8250df?logo=nvidia&logoColor=white)](https://github.com/NVIDIA/cuda-quantum/pull/5609)
 [![#5608 open](https://img.shields.io/badge/%235608-open-76B900?logo=nvidia&logoColor=white)](https://github.com/NVIDIA/cuda-quantum/pull/5608)
 [![#5649 open](https://img.shields.io/badge/%235649-open-76B900?logo=nvidia&logoColor=white)](https://github.com/NVIDIA/cuda-quantum/pull/5649)
-[![#5653 open](https://img.shields.io/badge/%235653-open-76B900?logo=nvidia&logoColor=white)](https://github.com/NVIDIA/cuda-quantum/pull/5653)
+[![#5655 open](https://img.shields.io/badge/%235655-open-76B900?logo=nvidia&logoColor=white)](https://github.com/NVIDIA/cuda-quantum/pull/5655)
+[![#5658 open](https://img.shields.io/badge/%235658-open-76B900?logo=nvidia&logoColor=white)](https://github.com/NVIDIA/cuda-quantum/pull/5658)
 [![Issues filed](https://img.shields.io/badge/issues-%235646%20%235647-1f6feb)](https://github.com/NVIDIA/cuda-quantum/issues/5646)
 [![Verification](https://img.shields.io/badge/verification-all%20passing-2da44e)](#running-the-verification)
 [![License](https://img.shields.io/badge/license-Apache--2.0-d4a72c)](LICENSE)
@@ -23,11 +24,13 @@
 | :--- | :--- | :--- | :--- |
 | [#5459](https://github.com/NVIDIA/cuda-quantum/pull/5459) | Merged 2026-09-24 | Document `exp_pauli`, `givens_rotation` and `fermionic_swap`; fix the sign in the `applyExpPauli` doc comment. Closes [#2141](https://github.com/NVIDIA/cuda-quantum/issues/2141). | [`verify_gates.py`](verification/verify_gates.py), numerical, 4/4 |
 | [#5608](https://github.com/NVIDIA/cuda-quantum/pull/5608) | Open | Fix the custom `KrausChannel` example under `cudaq.apply_noise`, which crashes as printed. First item of [#5181](https://github.com/NVIDIA/cuda-quantum/issues/5181). | [`verify_apply_noise_example.py`](verification/verify_apply_noise_example.py), runtime, 5/5 |
-| [#5609](https://github.com/NVIDIA/cuda-quantum/pull/5609) | Merged 2026-10-16 | Document how a `qvector` can be passed to a custom operation in Python vs C++. Requested in [#4961](https://github.com/NVIDIA/cuda-quantum/issues/4961). | [`verify_custom_op_qvector.py`](verification/verify_custom_op_qvector.py), runtime, 7/7 |
-| [#5646](https://github.com/NVIDIA/cuda-quantum/issues/5646) | Issue, open; fix in #5649 | Python bridge: single-target custom operations do not broadcast over a `qvector`, against spec §6. Filed at the CUDA-Q architect's request in review of #5609. | [`probe_bridge_consistency.py`](verification/probe_bridge_consistency.py), runtime probe |
-| [#5647](https://github.com/NVIDIA/cuda-quantum/issues/5647) | Issue, open; fix in #5653 | Python bridge: multi-target custom operations pull targets out of a `qvector`, which nothing else in the language does. Same request. The architect has since ruled #2484 should not be implemented, so the fix is to reject the call. | [`probe_bridge_consistency.py`](verification/probe_bridge_consistency.py), runtime probe |
-| [#5649](https://github.com/NVIDIA/cuda-quantum/pull/5649) | Open | Fix for #5646: broadcast single-target custom operations, plain and `.adj`, over a `qvector` and over several qubits. | [`verify_pr5649.sh`](verification/verify_pr5649.sh), runtime, 22 → 26 passed, 0 failed (5 skipped: no GPU) |
-| [#5653](https://github.com/NVIDIA/cuda-quantum/pull/5653) | Open | Fix for #5647: a `qvector`, whole or unpacked, is a compile-time error as the targets of a multi-target custom operation. | [`verify_bridge_patch.sh`](verification/verify_bridge_patch.sh), runtime, 17 → 22 passed, 0 failed; 31 related tests unchanged |
+| [#5609](https://github.com/NVIDIA/cuda-quantum/pull/5609) | Merged 2026-10-16; note reverted by #5652 on 2026-10-19 | Document how a `qvector` can be passed to a custom operation in Python vs C++. Requested in [#4961](https://github.com/NVIDIA/cuda-quantum/issues/4961). | [`verify_custom_op_qvector.py`](verification/verify_custom_op_qvector.py), runtime, 7/7 |
+| [#5646](https://github.com/NVIDIA/cuda-quantum/issues/5646) | Issue, open; direction pending — see [#5649](#pr-5649--broadcast-single-target-custom-operations) | Python bridge: single-target custom operations do not broadcast over a `qvector`, against spec §6. Filed at the CUDA-Q architect's request in review of #5609. | [`probe_bridge_consistency.py`](verification/probe_bridge_consistency.py), runtime probe |
+| [#5647](https://github.com/NVIDIA/cuda-quantum/issues/5647) | Issue, open; resolved on `main` by #5652 | Python bridge: multi-target custom operations pull targets out of a `qvector`, which nothing else in the language does. Same request. The architect has since ruled #2484 should not be implemented, so the fix is to reject the call. | [`probe_bridge_consistency.py`](verification/probe_bridge_consistency.py), runtime probe |
+| [#5649](https://github.com/NVIDIA/cuda-quantum/pull/5649) | Open; awaiting a direction after #5652 | Fix for #5646: broadcast single-target custom operations, plain and `.adj`, over a `qvector` and over several qubits. | [`verify_pr5649.sh`](verification/verify_pr5649.sh), runtime, 22 → 26 passed, 0 failed (5 skipped: no GPU) |
+| [#5653](https://github.com/NVIDIA/cuda-quantum/pull/5653) | Closed, duplicate of #5652 | Fix for #5647: a `qvector`, whole or unpacked, is a compile-time error as the targets of a multi-target custom operation. | [`verify_bridge_patch.sh`](verification/verify_bridge_patch.sh), runtime, 17 → 22 passed, 0 failed; 31 related tests unchanged |
+| [#5655](https://github.com/NVIDIA/cuda-quantum/pull/5655) | Open | Make the Observe and ObserveAsync snippets on "Executing Kernels" runnable on their own. Fixes [#3409](https://github.com/NVIDIA/cuda-quantum/issues/3409). | [`run_doc_blocks.py`](verification/run_doc_blocks.py), runtime, 2 snippets fixed, output matches docs |
+| [#5658](https://github.com/NVIDIA/cuda-quantum/pull/5658) | Open | Replace two bare kernel calls on "Building Kernels" with `get_state` + `print`, matching #3383's notebook fix. Fixes [#3384](https://github.com/NVIDIA/cuda-quantum/issues/3384). | [`run_doc_blocks.py`](verification/run_doc_blocks.py), runtime, output matches #3383 |
 
 > [!NOTE]
 > The rule for every item here: nothing is transcribed from existing comments or
@@ -47,6 +50,7 @@
 | [`verification/probe_bridge_consistency.py`](verification/probe_bridge_consistency.py) | #5646 / #5647 — prints how the bridge treats `qvector` arguments for built-ins, custom operations, and user kernels, side by side. |
 | [`verification/verify_pr5649.sh`](verification/verify_pr5649.sh) | #5649 — applies the PR's bridge change onto an installed `cudaq` wheel, runs the PR's test file before and after, then restores the wheel. |
 | [`verification/check_adj_broadcast_phase.py`](verification/check_adj_broadcast_phase.py) | #5649 — confirms broadcast `.adj` applies the adjoint, using a non-Hermitian operation the PR's own test cannot distinguish. |
+| [`verification/run_doc_blocks.py`](verification/run_doc_blocks.py) | #5655 / #5658 — runs every `[Begin …]` / `[End …]` block of a docs example file on its own, the way a reader copies one cell. |
 | [`verification/verify_bridge_patch.sh`](verification/verify_bridge_patch.sh) | #5653, and any bridge change — applies an `ast_bridge.py` diff onto an installed wheel and runs any number of test files before and after. |
 | [`verification/run_isolated.sh`](verification/run_isolated.sh) | Runs each pytest test in its own process, so a JIT-side abort on macOS arm64 fails one test instead of the whole run. |
 | [`patches/`](patches/) | Each upstream commit as a `git format-patch` export, DCO sign-off intact, plus the #5649 bridge change re-anchored to 0.16.0. |
@@ -265,6 +269,12 @@ and shares no files with #5601.
 > Merged 2026-10-16 by @khalatepradnya. Documents the API difference requested
 > in #4961. Its review produced issues #5646 and #5647 — see
 > [In review](#in-review-the-asymmetry-is-a-bug).
+>
+> **Reverted 2026-10-19 by [#5652](https://github.com/NVIDIA/cuda-quantum/pull/5652)
+> (@sacpis).** #5652 reverted #4173, the change that let Python custom
+> operations take a `qvector`. With that behavior gone, there is no
+> Python/C++ difference left for this note to describe, so #5652 removed it as
+> well. That is the outcome the review here pointed toward.
 
 Since #4173, a Python custom operation accepts its targets as a whole `qvector`.
 #4961 reported that C++ does not, and asked for C++ to follow. A compiler
@@ -404,7 +414,8 @@ than filed unasked.
 
 ## PR #5649 — broadcast single-target custom operations
 
-> Open. Fixes #5646.
+> Open. Fixes #5646. **Waiting for a direction:** #5652 now explicitly
+> rejects this form — see [After #5652](#after-5652-the-direction-is-open-again).
 
 Python now broadcasts a custom operation that has exactly one target, as
 spec §6 and C++ already require. For `numTargets == 1`, a new helper emits one
@@ -519,11 +530,47 @@ mention the adjoint form. #5649 broadcasts `.adj` too, which is consistent
 with Python's built-ins (`t.adj(q)` broadcasts today), but whether "base form"
 includes the adjoint is worth confirming in review.
 
+### After #5652: the direction is open again
+
+#5652, merged 2026-10-19, reverted #4173. Besides removing the multi-target
+`qvector` expansion, it restored `test_bug_2452`, which requires the exact
+case #5646 is about, `custom_i(qubits)` on a single-target operation, to be
+**rejected** at compile time:
+
+```text
+invalid target operand 0, broadcasting is not supported on custom operations.
+```
+
+That contradicts the rule stated earlier in this PR's review, that an
+operation with exactly one target has a broadcast overload. C++ also still
+broadcasts single-target custom operations. With two maintainer signals
+pointing different ways, this is not something to settle by rebasing. #5649
+now conflicts with `main`, and I
+[asked](https://github.com/NVIDIA/cuda-quantum/pull/5649#issuecomment-6258842104)
+which way to go:
+
+- **Stay positional-only:** #5649 and #5646 get closed.
+- **Broadcast:** #5649 is rebased onto #5652, and `test_bug_2452` is updated.
+
+The verification above still describes this PR's change correctly. It just may
+not be the direction the project takes.
+
 ---
 
 ## PR #5653 — reject a `qvector` as multi-target custom-op targets
 
-> Open. Fixes #5647.
+> **Closed 2026-10-19 as a duplicate of
+> [#5652](https://github.com/NVIDIA/cuda-quantum/pull/5652).** @sacpis opened
+> #5652 about four hours before this PR. It reverts #4173 outright, which goes
+> further than this PR: it also removes the `qvector` expansion and the
+> runtime trap that this PR had offered to clean up later. @khalatepradnya
+> pointed out the duplicate.
+>
+> **Lesson.** Before opening this PR I searched open PRs for `5647 OR custom
+> operation qvector`. #5652 is titled "Reverting qvector targets for multi-qubit
+> custom ops" and does not mention #5647, so the search missed it. A search on
+> the touched function (`__expandCustomOpTargets`) or the reverted PR (#4173)
+> would have found it.
 
 With #2484 ruled out in #5649's review, the direction for #5647 was settled:
 every operation takes its targets as individual positional arguments. For a
@@ -593,6 +640,60 @@ reported every test as failing. Pytest's rootdir there is the repository root,
 so collected IDs carry a `python/tests/...` prefix that does not resolve from
 the test's own directory. The runner now rebuilds each ID from the file it was
 given.
+
+---
+
+## PR #5655 and #5658 — docs snippets that work on their own
+
+> Both open. #5655 fixes #3409; #5658 fixes #3384. Both issues were reported by
+> @mmvandieren.
+
+Sphinx renders these pages from `docs/sphinx/examples/python/*.py` files cut
+into `[Begin …]` / `[End …]` blocks, and readers copy one block at a time.
+[`run_doc_blocks.py`](verification/run_doc_blocks.py) runs each block on its
+own against the installed `cudaq`. That turns both issues into something
+checkable, and in #5655's case it found more than the issue reported.
+
+### #5655 — "Executing Kernels"
+
+#3409 reported that `qubit_count` was undefined in one cell. Running every
+block showed four cells failing on their own, for three different missing
+names:
+
+```text
+Sample                           OK
+`SampleAsync`                    FAIL: NameError: name 'kernel' is not defined
+Run                              OK
+`RunCustom`                      OK
+`RunAsync`                       OK
+Observe                          FAIL: NameError: name 'qubit_count' is not defined
+`GetState`                       FAIL: NameError: name 'kernel' is not defined
+`GetStateAsync`                  OK
+`ObserveAsync`                   FAIL: NameError: name 'spin' is not defined
+```
+
+Observe and ObserveAsync define their own kernels, so they are meant to stand
+alone. They only lacked `qubit_count = 2` and, for ObserveAsync,
+`from cudaq import spin`. With those added, both run on their own and print
+exactly their documented output (`<H> = 0.0` and `1.1102230246251565e-16`).
+SampleAsync and GetState are short follow-ups to the Sample block directly
+above them. Making them standalone would mean copying its kernel into each, so
+the PR leaves them and offers to do it if maintainers prefer.
+
+### #5658 — "Building Kernels"
+
+#3384 pointed out that `kernel(thetas)` runs but shows nothing. #3383 fixed it,
+but only in `building_kernels.ipynb`. The docs page renders the snippet from
+`building_kernels.py` (`literalinclude` in `using/examples/building_kernels.rst`),
+where both bare calls were still there. #5658 applies #3383's change,
+`cudaq.get_state(...)` and a `print`, to the `.py` file. Checked on its own:
+
+- `PassingState` prints the Bell state exactly as #3383 recorded in the
+  notebook.
+- `ParameterizedKernels` matches the analytic state of `rx(0.024)` ⊗
+  `ry(0.543)`: the `|00⟩` amplitude is cos(0.012)·cos(0.2715) = 0.9633.
+
+Both files still run as a whole and are yapf-clean.
 
 ---
 
@@ -684,6 +785,13 @@ bash verification/verify_pr5649.sh python3 /tmp/test_custom_operations.py
 duration of the run and restores it on exit. Use a virtual environment.
 
 ```bash
+# PR #5655 / #5658 — run each docs snippet on its own
+python3 verification/run_doc_blocks.py ../cuda-quantum/docs/sphinx/examples/python/executing_kernels.py
+python3 verification/run_doc_blocks.py ../cuda-quantum/docs/sphinx/examples/python/building_kernels.py \
+  PassingState ParameterizedKernels
+```
+
+```bash
 # PR #5653 — apply the bridge part of the patch onto the wheel, run tests from a
 # checkout of the PR branch
 git -C ../cuda-quantum fetch https://github.com/jersonboydmilan/cuda-quantum.git \
@@ -708,12 +816,12 @@ cd cuda-quantum
 git am ../patches/0002-fix-apply-noise-custom-channel-example.patch
 ```
 
-Each patch applies on its own. `0001` and `0003` are merged upstream; `0002` is
-open and was cut from `main` at `be7b0b3`. All three carry their original DCO
+Each patch applies on its own. `0001` is merged upstream. `0003` was merged and
+then reverted by #5652. `0002` is open and was cut from `main` at `be7b0b3`. All three carry their original DCO
 sign-off. `0004` is different: it is the bridge part of #5649 re-anchored to
 the 0.16.0 release, for verification only, so it targets an installed wheel
 rather than a checkout. `0005` is #5653's commit as a `git format-patch`
-export against `main`.
+export, kept for reference since that PR closed as a duplicate of #5652.
 
 ## Star History
 
